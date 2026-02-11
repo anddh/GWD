@@ -6,7 +6,7 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceArea 
 } from 'recharts';
 import { 
-  RefreshCw, Activity, Wind, Droplets, AlertTriangle 
+  RefreshCw, AlertTriangle 
 } from 'lucide-react';
 
 // --- 1. THEME CONFIGURATION ---
@@ -31,6 +31,7 @@ const generateTheme = () => createTheme({
 const processData = (rawData) => {
   if (!rawData || !rawData.hr) return [];
   
+  // Handle the Garmin structure safely
   const hrValues = rawData.hr.heartRateValues || [];
   
   return hrValues.map((point) => ({
@@ -41,16 +42,12 @@ const processData = (rawData) => {
   })).slice(-40); 
 };
 
-// --- 3. CHART COMPONENT (THE FIX) ---
-// We accept a specific 'height' prop and pass it directly to the chart.
+// --- 3. CHART COMPONENT ---
 const MedicalChart = ({ data, dataKey, color, label, unit, domain, height }) => {
   const latest = data.length ? Math.round(data[data.length - 1][dataKey]) : '--';
 
   return (
-    // 1. Container: Forces explicit pixel size.
     <div style={{ width: '100%', height: height, position: 'relative' }}>
-      
-      {/* Header Overlay */}
       <div style={{ position: 'absolute', top: 10, left: 20, zIndex: 10 }}>
         <Typography variant="caption" sx={{ color: 'text.secondary', textTransform: 'uppercase', letterSpacing: 1 }}>{label}</Typography>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
@@ -58,9 +55,6 @@ const MedicalChart = ({ data, dataKey, color, label, unit, domain, height }) => 
             <Typography variant="caption" sx={{ color: 'text.secondary' }}>{unit}</Typography>
         </div>
       </div>
-      
-      {/* 2. Chart: We pass 'height={height}' (number) instead of "100%".
-         This prevents the browser from guessing and crashing. */}
       <ResponsiveContainer width="100%" height={height}>
         <LineChart data={data} margin={{ top: 5, right: 0, bottom: 0, left: 0 }}>
           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.1)" />
@@ -71,14 +65,7 @@ const MedicalChart = ({ data, dataKey, color, label, unit, domain, height }) => 
             itemStyle={{ color: '#fff' }}
             labelStyle={{ display: 'none' }}
           />
-          <Line 
-            type="monotone" 
-            dataKey={dataKey} 
-            stroke={color} 
-            strokeWidth={3} 
-            dot={false} 
-            isAnimationActive={false} 
-          />
+          <Line type="monotone" dataKey={dataKey} stroke={color} strokeWidth={3} dot={false} isAnimationActive={false} />
           <ReferenceArea y1={domain[0]} y2={domain[1]} fill="transparent" />
         </LineChart>
       </ResponsiveContainer>
@@ -98,8 +85,13 @@ export default function App() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch('/api'); 
-      if (!res.ok) throw new Error(`Server Error (${res.status})`);
+      // We add a timestamp (?t=...) to force the browser to get new data
+      const res = await fetch('/api?t=' + Date.now()); 
+      
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Server Error (${res.status}): ${text.substring(0, 50)}`);
+      }
 
       const json = await res.json();
       setUsingMock(!!json.isMock);
@@ -133,75 +125,48 @@ export default function App() {
             <IconButton onClick={fetchData} disabled={loading}><RefreshCw size={20}/></IconButton>
           </Box>
         </Box>
-{/* DEBUG DUMP - REMOVE LATER */}
-<Box sx={{ p: 2, mb: 2, bgcolor: '#333', color: '#0f0', fontFamily: 'monospace', fontSize: 10, borderRadius: 2, overflow: 'auto', maxHeight: 200 }}>
-  <Typography variant="caption" sx={{ display: 'block', mb: 1, color: '#fff' }}>
-    DEBUG DATA FEED
-  </Typography>
-  {/* We wrap the JSON stringify in a safe block */}
-  <pre style={{ margin: 0 }}>
-    {JSON.stringify(data.slice(0, 3), null, 2)}
-  </pre>
-</Box>
-{/* END DEBUG */}
 
-<Grid container spacing={3}>
-  {/* ... rest of your code ... */}
+        {/* --- DEBUG BOX: Shows raw data if charts are empty --- */}
+        <Box sx={{ p: 2, mb: 2, bgcolor: '#333', color: '#0f0', fontFamily: 'monospace', fontSize: 10, borderRadius: 2, overflow: 'auto', maxHeight: 200 }}>
+            <Typography variant="caption" sx={{ display: 'block', mb: 1, color: '#fff' }}>DEBUG DATA FEED</Typography>
+            <pre style={{ margin: 0 }}>
+                {JSON.stringify(data.slice(0, 3), null, 2)}
+            </pre>
+        </Box>
+        {/* --- END DEBUG --- */}
+
         <Grid container spacing={3}>
-          {/* Main Heart Rate Chart - Fixed Height 300px */}
+          {/* Main Chart */}
           <Grid item xs={12} md={8}>
             <Card>
               <CardContent sx={{ p: 0, '&:last-child': { pb: 0 } }}>
-                <MedicalChart 
-                  data={data} 
-                  dataKey="hr" 
-                  color={theme.palette.error.main} 
-                  label="Heart Rate" 
-                  unit="BPM" 
-                  domain={[40, 180]} 
-                  height={300} // Explicit height prevents crash
-                />
+                <MedicalChart data={data} dataKey="hr" color={theme.palette.error.main} label="Heart Rate" unit="BPM" domain={[40, 180]} height={300} />
               </CardContent>
             </Card>
           </Grid>
           
-          {/* Side Charts - Fixed Height 140px */}
+          {/* Side Charts */}
           <Grid item xs={12} md={4}>
             <Grid container spacing={3}>
                 <Grid item xs={12}>
                     <Card>
                         <CardContent sx={{ p: 0, '&:last-child': { pb: 0 } }}>
-                            <MedicalChart 
-                              data={data} 
-                              dataKey="spo2" 
-                              color={theme.palette.info.main} 
-                              label="Pulse Ox" 
-                              unit="%" 
-                              domain={[85, 100]} 
-                              height={140} // Explicit height prevents crash
-                            />
+                            <MedicalChart data={data} dataKey="spo2" color={theme.palette.info.main} label="Pulse Ox" unit="%" domain={[85, 100]} height={140} />
                         </CardContent>
                     </Card>
                 </Grid>
                 <Grid item xs={12}>
                     <Card>
                         <CardContent sx={{ p: 0, '&:last-child': { pb: 0 } }}>
-                            <MedicalChart 
-                              data={data} 
-                              dataKey="resp" 
-                              color={theme.palette.success.main} 
-                              label="Respiration" 
-                              unit="brpm" 
-                              domain={[10, 25]} 
-                              height={140} // Explicit height prevents crash
-                            />
+                            <MedicalChart data={data} dataKey="resp" color={theme.palette.success.main} label="Respiration" unit="brpm" domain={[10, 25]} height={140} />
                         </CardContent>
                     </Card>
                 </Grid>
             </Grid>
           </Grid>
         </Grid>
-      </Box>
+
+      </Box> {/* <--- This was the missing tag causing the error! */}
     </ThemeProvider>
   );
 }
