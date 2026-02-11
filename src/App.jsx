@@ -9,21 +9,19 @@ import {
   Activity, Footprints, Map, ArrowUpCircle, RefreshCw, Heart, Wind, Droplets 
 } from 'lucide-react';
 
-// --- 1. PREMIUM THEME ---
+// --- 1. THEME ---
 const generateTheme = () => createTheme({
   palette: {
     mode: 'dark',
-    primary: { main: '#8B5CF6' }, // Vivid Violet
+    primary: { main: '#8B5CF6' },
     background: { default: '#09090B', paper: '#18181B' }, 
     text: { primary: '#FAFAFA', secondary: '#A1A1AA' },
-    error: { main: '#EF4444' },   // Bright Red
-    info: { main: '#06B6D4' },    // Cyan
-    success: { main: '#10B981' }, // Emerald
-    warning: { main: '#F59E0B' }  // Amber
+    error: { main: '#EF4444' },   
+    info: { main: '#06B6D4' },    
+    success: { main: '#10B981' }, 
+    warning: { main: '#F59E0B' }  
   },
-  typography: { 
-    fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
-  },
+  typography: { fontFamily: '"Inter", "Roboto", sans-serif' },
   shape: { borderRadius: 24 },
   components: {
     MuiCard: { 
@@ -32,7 +30,7 @@ const generateTheme = () => createTheme({
           backgroundImage: 'none', 
           backgroundColor: '#18181B', 
           border: '1px solid rgba(255,255,255,0.08)',
-          boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)'
+          boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)'
         } 
       } 
     }
@@ -43,15 +41,13 @@ const generateTheme = () => createTheme({
 const processData = (rawData) => {
   const hrValues = rawData?.hr?.heartRateValues || [];
   const chartData = hrValues.map((point) => ({
-    // Time format: "10:30"
     time: new Date(point[0]).toLocaleTimeString([], { hour: '2-digit', minute:'2-digit', hour12: false }),
     hr: point[1],
     spo2: 95 + (Math.random() * 4), 
     resp: 12 + (Math.random() * 6),
-  })).slice(-45); // Keep history for the graph
+  })).slice(-45); 
 
   const stats = rawData?.stats || {};
-  
   return {
     chartData,
     daily: {
@@ -70,9 +66,7 @@ const StatCard = ({ icon: Icon, label, value, unit, color }) => (
       <Box sx={{ p: 1, borderRadius: '12px', bgcolor: `${color}15`, color: color, mr: 1.5 }}>
         <Icon size={20} strokeWidth={2.5} />
       </Box>
-      <Typography variant="caption" color="text.secondary" fontWeight="600" textTransform="uppercase" letterSpacing={1}>
-        {label}
-      </Typography>
+      <Typography variant="caption" color="text.secondary" fontWeight="600" textTransform="uppercase" letterSpacing={1}>{label}</Typography>
     </Box>
     <Typography variant="h4" sx={{ zIndex: 1, fontWeight: 700 }}>
       {value} <Typography component="span" variant="body1" color="text.secondary" fontWeight="500">{unit}</Typography>
@@ -80,24 +74,35 @@ const StatCard = ({ icon: Icon, label, value, unit, color }) => (
   </Card>
 );
 
-// --- 4. PREMIUM CHART (Bigger, Gridded, Time Axis) ---
-const MedicalChart = ({ data, dataKey, color, label, unit, domain, height, icon: Icon }) => {
+// --- 4. AUTO-SCALING CHART COMPONENT ---
+const MedicalChart = ({ data, dataKey, color, label, unit, domain, icon: Icon }) => {
   const latest = data.length ? Math.round(data[data.length - 1][dataKey]) : '--';
   const containerRef = useRef(null);
-  const [chartWidth, setChartWidth] = useState(300);
+  
+  // We track both width AND height now
+  const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const gradientId = `gradient-${dataKey}`;
 
   useEffect(() => {
-    const updateWidth = () => {
-      if (containerRef.current) setChartWidth(containerRef.current.offsetWidth);
-    };
-    updateWidth();
-    window.addEventListener('resize', updateWidth);
-    return () => window.removeEventListener('resize', updateWidth);
+    if (!containerRef.current) return;
+
+    // The Observer watches for ANY size change (window resize or CSS change)
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (let entry of entries) {
+        setDimensions({
+          width: entry.contentRect.width,
+          height: entry.contentRect.height
+        });
+      }
+    });
+
+    resizeObserver.observe(containerRef.current);
+    return () => resizeObserver.disconnect();
   }, []);
 
   return (
-    <div ref={containerRef} style={{ width: '100%', height: height, position: 'relative', overflow: 'hidden' }}>
+    // The container fills 100% of the parent Card
+    <div ref={containerRef} style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden' }}>
       
       {/* Header Overlay */}
       <Box sx={{ position: 'absolute', top: 20, left: 24, zIndex: 10 }}>
@@ -112,52 +117,47 @@ const MedicalChart = ({ data, dataKey, color, label, unit, domain, height, icon:
         </Typography>
       </Box>
       
-      {/* The Chart */}
-      <AreaChart width={chartWidth} height={height} data={data} margin={{ top: 50, right: 10, left: -10, bottom: 0 }}>
-        <defs>
-          <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor={color} stopOpacity={0.4}/>
-            <stop offset="95%" stopColor={color} stopOpacity={0.0}/>
-          </linearGradient>
-        </defs>
-        
-        {/* GRID: Made stronger (opacity 0.1) and added vertical lines */}
-        <CartesianGrid strokeDasharray="3 3" vertical={true} stroke="rgba(255,255,255,0.1)" />
-        
-        {/* X-AXIS: Now Visible with Time */}
-        <XAxis 
-          dataKey="time" 
-          tick={{ fill: '#71717a', fontSize: 10 }} 
-          axisLine={false} 
-          tickLine={false} 
-          minTickGap={30}
-        />
-        
-        <YAxis 
-          domain={domain} 
-          tick={{ fill: '#71717a', fontSize: 10, fontWeight: 500 }} 
-          axisLine={false} 
-          tickLine={false}
-          width={40}
-        />
-        
-        <Tooltip 
-          contentStyle={{ backgroundColor: '#18181B', borderRadius: 12, border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.5)' }} 
-          itemStyle={{ color: '#FAFAFA', fontWeight: 600 }}
-          labelStyle={{ display: 'none' }}
-          formatter={(value) => [`${Math.round(value)} ${unit}`, label]}
-        />
-        
-        <Area 
-          type="monotone" 
-          dataKey={dataKey} 
-          stroke={color} 
-          strokeWidth={3} 
-          fillOpacity={1} 
-          fill={`url(#${gradientId})`} 
-          animationDuration={1500}
-        />
-      </AreaChart>
+      {/* Chart only renders when we know the dimensions */}
+      {dimensions.width > 0 && dimensions.height > 0 && (
+        <AreaChart width={dimensions.width} height={dimensions.height} data={data} margin={{ top: 50, right: 10, left: -10, bottom: 0 }}>
+          <defs>
+            <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor={color} stopOpacity={0.4}/>
+              <stop offset="95%" stopColor={color} stopOpacity={0.0}/>
+            </linearGradient>
+          </defs>
+          <CartesianGrid strokeDasharray="3 3" vertical={true} stroke="rgba(255,255,255,0.08)" />
+          <XAxis 
+            dataKey="time" 
+            tick={{ fill: '#71717a', fontSize: 10 }} 
+            axisLine={false} 
+            tickLine={false} 
+            minTickGap={30}
+          />
+          <YAxis 
+            domain={domain} 
+            tick={{ fill: '#71717a', fontSize: 10, fontWeight: 500 }} 
+            axisLine={false} 
+            tickLine={false}
+            width={40}
+          />
+          <Tooltip 
+            contentStyle={{ backgroundColor: '#18181B', borderRadius: 12, border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.5)' }} 
+            itemStyle={{ color: '#FAFAFA', fontWeight: 600 }}
+            labelStyle={{ display: 'none' }}
+            formatter={(value) => [`${Math.round(value)} ${unit}`, label]}
+          />
+          <Area 
+            type="monotone" 
+            dataKey={dataKey} 
+            stroke={color} 
+            strokeWidth={3} 
+            fillOpacity={1} 
+            fill={`url(#${gradientId})`} 
+            animationDuration={1500}
+          />
+        </AreaChart>
+      )}
     </div>
   );
 };
@@ -198,7 +198,7 @@ export default function App() {
       <Box sx={{ p: { xs: 2, md: 4 }, minHeight: '100vh', bgcolor: 'background.default' }}>
         
         {/* Header */}
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 5, alignItems: 'center' }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3, alignItems: 'center' }}>
           <Box>
              <Typography variant="h4" fontWeight="800" letterSpacing="-1px">Health<span style={{color: theme.palette.primary.main}}>Dash</span></Typography>
              <Typography variant="body2" color="text.secondary">Real-time biometrics & daily activity</Typography>
@@ -233,11 +233,15 @@ export default function App() {
           </Grid>
         </Grid>
 
-        {/* CHARTS GRID */}
+        {/* CHARTS GRID - NOW USING VIEWPORT HEIGHT (vh) */}
         <Grid container spacing={3}>
-          {/* Heart Rate - BIGGER (400px) */}
+          {/* Main Chart */}
           <Grid item xs={12} md={8}>
-            <Card sx={{ height: '100%' }}>
+            <Card sx={{ 
+              // Mobile: 40% of screen height. Desktop: 55% of screen height
+              height: { xs: '40vh', md: '55vh' }, 
+              minHeight: 300 
+            }}>
               <CardContent sx={{ p: 0, height: '100%', '&:last-child': { pb: 0 } }}>
                 <MedicalChart 
                   data={data.chartData} 
@@ -246,18 +250,22 @@ export default function App() {
                   label="Heart Rate" 
                   unit="BPM" 
                   domain={[40, 180]} 
-                  height={400} // Increased Size
                   icon={Heart}
                 />
               </CardContent>
             </Card>
           </Grid>
           
-          {/* Side Charts - BIGGER (200px each) */}
+          {/* Side Charts Stack */}
           <Grid item xs={12} md={4}>
-            <Stack spacing={3}>
-                <Card>
-                    <CardContent sx={{ p: 0, '&:last-child': { pb: 0 } }}>
+            <Stack spacing={3} sx={{ height: '100%' }}>
+                <Card sx={{ 
+                   // Mobile: 25% screen. Desktop: half of the main chart (approx 26vh)
+                   height: { xs: '25vh', md: '26vh' }, 
+                   minHeight: 180,
+                   flex: 1 
+                }}>
+                    <CardContent sx={{ p: 0, height: '100%', '&:last-child': { pb: 0 } }}>
                         <MedicalChart 
                           data={data.chartData} 
                           dataKey="spo2" 
@@ -265,13 +273,16 @@ export default function App() {
                           label="Blood Oxygen" 
                           unit="%" 
                           domain={[85, 100]} 
-                          height={200} // Increased Size
                           icon={Droplets}
                         />
                     </CardContent>
                 </Card>
-                <Card>
-                    <CardContent sx={{ p: 0, '&:last-child': { pb: 0 } }}>
+                <Card sx={{ 
+                   height: { xs: '25vh', md: '26vh' }, 
+                   minHeight: 180,
+                   flex: 1 
+                }}>
+                    <CardContent sx={{ p: 0, height: '100%', '&:last-child': { pb: 0 } }}>
                         <MedicalChart 
                           data={data.chartData} 
                           dataKey="resp" 
@@ -279,7 +290,6 @@ export default function App() {
                           label="Respiration" 
                           unit="brpm" 
                           domain={[10, 25]} 
-                          height={200} // Increased Size
                           icon={Wind}
                         />
                     </CardContent>
