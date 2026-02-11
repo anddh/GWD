@@ -135,9 +135,14 @@ export default function App() {
         </Box>
 {/* DEBUG DUMP - REMOVE LATER */}
 <Box sx={{ p: 2, mb: 2, bgcolor: '#333', color: '#0f0', fontFamily: 'monospace', fontSize: 10, borderRadius: 2, overflow: 'auto', maxHeight: 200 }}>
-  <Typography variant="caption" sx={{ display: 'block', mb: 1, color: '#fff' }}>DEBUG DATA FEED:</Typography>
-  {JSON.stringify(data.slice(0, 3), null, 2)}
-</Box> 
+  <Typography variant="caption" sx={{ display: 'block', mb: 1, color: '#fff' }}>
+    DEBUG DATA FEED
+  </Typography>
+  {/* We wrap the JSON stringify in a safe block */}
+  <pre style={{ margin: 0 }}>
+    {JSON.stringify(data.slice(0, 3), null, 2)}
+  </pre>
+</Box>
 {/* END DEBUG */}
 
 <Grid container spacing={3}>
