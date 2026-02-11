@@ -133,7 +133,15 @@ export default function App() {
             <IconButton onClick={fetchData} disabled={loading}><RefreshCw size={20}/></IconButton>
           </Box>
         </Box>
+{/* DEBUG DUMP - REMOVE LATER */}
+<Box sx={{ p: 2, mb: 2, bgcolor: '#333', color: '#0f0', fontFamily: 'monospace', fontSize: 10, borderRadius: 2, overflow: 'auto', maxHeight: 200 }}>
+  <Typography variant="caption" sx={{ display: 'block', mb: 1, color: '#fff' }}>DEBUG DATA FEED:</Typography>
+  {JSON.stringify(data.slice(0, 3), null, 2)}
+</Box> 
+{/* END DEBUG */}
 
+<Grid container spacing={3}>
+  {/* ... rest of your code ... */}
         <Grid container spacing={3}>
           {/* Main Heart Rate Chart - Fixed Height 300px */}
           <Grid item xs={12} md={8}>
