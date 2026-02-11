@@ -6,10 +6,10 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceArea 
 } from 'recharts';
 import { 
-  RefreshCw, AlertTriangle 
+  RefreshCw, AlertTriangle, Activity 
 } from 'lucide-react';
 
-// --- 1. THEME CONFIGURATION ---
+// --- 1. THEME ---
 const generateTheme = () => createTheme({
   palette: {
     mode: 'dark',
@@ -30,10 +30,7 @@ const generateTheme = () => createTheme({
 // --- 2. DATA PROCESSOR ---
 const processData = (rawData) => {
   if (!rawData || !rawData.hr) return [];
-  
-  // Handle the Garmin structure safely
   const hrValues = rawData.hr.heartRateValues || [];
-  
   return hrValues.map((point) => ({
     time: new Date(point[0]).toLocaleTimeString([], { hour: '2-digit', minute:'2-digit' }),
     hr: point[1],
@@ -42,15 +39,15 @@ const processData = (rawData) => {
   })).slice(-40); 
 };
 
-// --- 3. CHART COMPONENT (The "Force Render" Version) ---
+// --- 3. CHART COMPONENT (Responsive & Animated) ---
 const MedicalChart = ({ data, dataKey, color, label, unit, domain, height }) => {
-  // Calculate latest value for the header
   const latest = data.length ? Math.round(data[data.length - 1][dataKey]) : '--';
 
   return (
-    <div style={{ width: '100%', height: height, position: 'relative', overflow: 'hidden' }}>
+    // 99% width prevents overflow scrollbars that confuse Recharts
+    <div style={{ width: '99%', height: height, position: 'relative' }}>
       
-      {/* Header Overlay */}
+      {/* Header */}
       <div style={{ position: 'absolute', top: 10, left: 20, zIndex: 10 }}>
         <Typography variant="caption" sx={{ color: 'text.secondary', textTransform: 'uppercase', letterSpacing: 1 }}>{label}</Typography>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
@@ -59,12 +56,9 @@ const MedicalChart = ({ data, dataKey, color, label, unit, domain, height }) => 
         </div>
       </div>
       
-      {/* THE FIX: We REMOVED <ResponsiveContainer>.
-         We are putting the Width/Height directly on the Chart.
-         We assume a width of 500px for now just to force it to appear.
-      */}
-      <div style={{ marginTop: 0 }}>
-        <LineChart width={window.innerWidth > 600 ? 600 : 300} height={height} data={data}>
+      {/* Responsive Container Restored */}
+      <ResponsiveContainer width="100%" height={height}>
+        <LineChart data={data}>
           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.1)" />
           <XAxis dataKey="time" hide />
           <YAxis domain={domain} hide />
@@ -77,15 +71,18 @@ const MedicalChart = ({ data, dataKey, color, label, unit, domain, height }) => 
             type="monotone" 
             dataKey={dataKey} 
             stroke={color} 
-            strokeWidth={4} // Made thicker so you can't miss it
-            dot={false} 
-            isAnimationActive={false} 
+            strokeWidth={3} 
+            dot={{ r: 4, strokeWidth: 0, fill: color }} // Add a glowing dot at each point
+            activeDot={{ r: 6 }}
+            isAnimationActive={true} // ANIMATION ON!
+            animationDuration={1500}
           />
         </LineChart>
-      </div>
+      </ResponsiveContainer>
     </div>
   );
 };
+
 // --- 4. MAIN APP ---
 export default function App() {
   const theme = useMemo(() => generateTheme(), []);
@@ -95,61 +92,45 @@ export default function App() {
   const [usingMock, setUsingMock] = useState(false);
 
   const fetchData = async () => {
-    setLoading(true);
-    setError(null);
+    // Silent update (don't show loading spinner every time)
     try {
-      // We add a timestamp (?t=...) to force the browser to get new data
       const res = await fetch('/api?t=' + Date.now()); 
-      
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`Server Error (${res.status}): ${text.substring(0, 50)}`);
-      }
-
+      if (!res.ok) throw new Error("Server Error");
       const json = await res.json();
       setUsingMock(!!json.isMock);
       setData(processData(json));
     } catch (e) {
-      console.error("Data Load Failed:", e);
-      setError(e.message);
-    } finally {
-      setLoading(false);
+      console.error("Update failed:", e);
+      // Don't show error UI for transient network blips, just log it
     }
   };
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => { 
+    fetchData(); // 1. Initial Fetch
+    
+    // 2. Set up Auto-Refresh (Every 30 seconds)
+    const interval = setInterval(fetchData, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <Box sx={{ p: 3, minHeight: '100vh', bgcolor: 'background.default' }}>
         
-        {/* Header */}
         <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 4, alignItems: 'center' }}>
-          <Typography variant="h5" fontWeight="600">Garmin Vitals</Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Activity size={32} color={theme.palette.primary.main} />
+            <Typography variant="h5" fontWeight="600">Garmin Vitals</Typography>
+          </Box>
+          
           <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-            {error ? (
-               <Chip label="Error" color="error" icon={<AlertTriangle size={14}/>} />
-            ) : usingMock ? (
-               <Chip label="Demo Mode" color="warning" variant="outlined" />
-            ) : (
-               <Chip label="Live" color="success" icon={<RefreshCw size={14} className={loading ? "spin" : ""} />} />
-            )}
-            <IconButton onClick={fetchData} disabled={loading}><RefreshCw size={20}/></IconButton>
+             {usingMock && <Chip label="Demo Mode" color="warning" variant="outlined" />}
+             <Chip label="Live Sync" color="success" variant="filled" />
           </Box>
         </Box>
 
-        {/* --- DEBUG BOX: Shows raw data if charts are empty --- */}
-        <Box sx={{ p: 2, mb: 2, bgcolor: '#333', color: '#0f0', fontFamily: 'monospace', fontSize: 10, borderRadius: 2, overflow: 'auto', maxHeight: 200 }}>
-            <Typography variant="caption" sx={{ display: 'block', mb: 1, color: '#fff' }}>DEBUG DATA FEED</Typography>
-            <pre style={{ margin: 0 }}>
-                {JSON.stringify(data.slice(0, 3), null, 2)}
-            </pre>
-        </Box>
-        {/* --- END DEBUG --- */}
-
         <Grid container spacing={3}>
-          {/* Main Chart */}
           <Grid item xs={12} md={8}>
             <Card>
               <CardContent sx={{ p: 0, '&:last-child': { pb: 0 } }}>
@@ -158,7 +139,6 @@ export default function App() {
             </Card>
           </Grid>
           
-          {/* Side Charts */}
           <Grid item xs={12} md={4}>
             <Grid container spacing={3}>
                 <Grid item xs={12}>
@@ -178,8 +158,7 @@ export default function App() {
             </Grid>
           </Grid>
         </Grid>
-
-      </Box> {/* <--- This was the missing tag causing the error! */}
+      </Box>
     </ThemeProvider>
   );
 }
