@@ -41,37 +41,50 @@ const processData = (rawData) => {
   })).slice(-40); 
 };
 
-// --- 3. CHART COMPONENT (FIXED) ---
-// We added a 'height' prop to force the chart open in pixels
+// --- 3. CHART COMPONENT (Bulletproof Layout) ---
 const MedicalChart = ({ data, dataKey, color, label, unit, domain, height = 200 }) => {
   const latest = data.length ? Math.round(data[data.length - 1][dataKey]) : '--';
 
   return (
-    <Box sx={{ width: '100%', height: height, position: 'relative' }}>
+    // 1. STRICT CONTAINER: We use a plain div with a hard-coded pixel height.
+    // This guarantees the chart always has space, preventing the "height(-1)" error.
+    <div style={{ width: '100%', height: height, position: 'relative' }}>
+      
       {/* Header Overlay */}
-      <Box sx={{ position: 'absolute', top: 10, left: 20, zIndex: 10 }}>
+      <div style={{ position: 'absolute', top: 10, left: 20, zIndex: 10 }}>
         <Typography variant="caption" sx={{ color: 'text.secondary', textTransform: 'uppercase', letterSpacing: 1 }}>{label}</Typography>
-        <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1 }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
             <Typography variant="h4" sx={{ color: color, fontWeight: 'bold' }}>{latest}</Typography>
             <Typography variant="caption" sx={{ color: 'text.secondary' }}>{unit}</Typography>
-        </Box>
-      </Box>
+        </div>
+      </div>
       
-      {/* Chart - Now using explicit pixel height from props */}
-      <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={data}>
+      {/* 2. RESPONSIVE CONTAINER: Added 'minWidth' to catch layout edge cases */}
+      <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+        <LineChart data={data} margin={{ top: 5, right: 0, bottom: 0, left: 0 }}>
           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.1)" />
+          {/* Hide X/Y Axis to keep it looking like a medical strip */}
           <XAxis dataKey="time" hide />
-          <YAxis domain={domain} orientation="right" tick={{ fill: '#888', fontSize: 10 }} axisLine={false} tickLine={false} />
-          <Tooltip contentStyle={{ backgroundColor: '#1D1B20', borderRadius: 12, border: 'none' }} />
-          <Line type="monotone" dataKey={dataKey} stroke={color} strokeWidth={3} dot={false} isAnimationActive={false} />
+          <YAxis domain={domain} hide />
+          <Tooltip 
+            contentStyle={{ backgroundColor: '#1D1B20', borderRadius: 12, border: '1px solid rgba(255,255,255,0.1)' }} 
+            itemStyle={{ color: '#fff' }}
+            labelStyle={{ display: 'none' }}
+          />
+          <Line 
+            type="monotone" 
+            dataKey={dataKey} 
+            stroke={color} 
+            strokeWidth={3} 
+            dot={false} 
+            isAnimationActive={false} // Disabling animation prevents render race conditions
+          />
           <ReferenceArea y1={domain[0]} y2={domain[1]} fill="transparent" />
         </LineChart>
       </ResponsiveContainer>
-    </Box>
+    </div>
   );
 };
-
 // --- 4. MAIN APP ---
 export default function App() {
   const theme = useMemo(() => generateTheme(), []);
