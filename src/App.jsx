@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
-  Box, Card, CardContent, Typography, Grid, ThemeProvider, createTheme, CssBaseline, Chip, Stack, IconButton, LinearProgress
+  Box, Card, CardContent, Typography, Grid, ThemeProvider, createTheme, CssBaseline, Chip, Stack, IconButton
 } from '@mui/material';
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip 
@@ -14,7 +14,7 @@ const generateTheme = () => createTheme({
   palette: {
     mode: 'dark',
     primary: { main: '#8B5CF6' }, // Vivid Violet
-    background: { default: '#09090B', paper: '#18181B' }, // Ultra Dark
+    background: { default: '#09090B', paper: '#18181B' }, 
     text: { primary: '#FAFAFA', secondary: '#A1A1AA' },
     error: { main: '#EF4444' },   // Bright Red
     info: { main: '#06B6D4' },    // Cyan
@@ -23,8 +23,6 @@ const generateTheme = () => createTheme({
   },
   typography: { 
     fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
-    h4: { fontWeight: 700, letterSpacing: '-0.02em' },
-    h6: { fontWeight: 600, letterSpacing: '-0.01em' }
   },
   shape: { borderRadius: 24 },
   components: {
@@ -34,7 +32,7 @@ const generateTheme = () => createTheme({
           backgroundImage: 'none', 
           backgroundColor: '#18181B', 
           border: '1px solid rgba(255,255,255,0.08)',
-          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
+          boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)'
         } 
       } 
     }
@@ -45,11 +43,12 @@ const generateTheme = () => createTheme({
 const processData = (rawData) => {
   const hrValues = rawData?.hr?.heartRateValues || [];
   const chartData = hrValues.map((point) => ({
-    time: new Date(point[0]).toLocaleTimeString([], { hour: '2-digit', minute:'2-digit' }),
+    // Time format: "10:30"
+    time: new Date(point[0]).toLocaleTimeString([], { hour: '2-digit', minute:'2-digit', hour12: false }),
     hr: point[1],
     spo2: 95 + (Math.random() * 4), 
     resp: 12 + (Math.random() * 6),
-  })).slice(-45); // slightly more history
+  })).slice(-45); // Keep history for the graph
 
   const stats = rawData?.stats || {};
   
@@ -63,12 +62,10 @@ const processData = (rawData) => {
   };
 };
 
-// --- 3. STAT CARD (With Gradient Icons) ---
+// --- 3. STAT CARD ---
 const StatCard = ({ icon: Icon, label, value, unit, color }) => (
   <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center', p: 3, position: 'relative', overflow: 'hidden' }}>
-    {/* Background Glow */}
     <Box sx={{ position: 'absolute', top: -20, right: -20, width: 100, height: 100, borderRadius: '50%', bgcolor: color, opacity: 0.1, filter: 'blur(40px)' }} />
-    
     <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
       <Box sx={{ p: 1, borderRadius: '12px', bgcolor: `${color}15`, color: color, mr: 1.5 }}>
         <Icon size={20} strokeWidth={2.5} />
@@ -77,19 +74,17 @@ const StatCard = ({ icon: Icon, label, value, unit, color }) => (
         {label}
       </Typography>
     </Box>
-    <Typography variant="h4" sx={{ zIndex: 1 }}>
+    <Typography variant="h4" sx={{ zIndex: 1, fontWeight: 700 }}>
       {value} <Typography component="span" variant="body1" color="text.secondary" fontWeight="500">{unit}</Typography>
     </Typography>
   </Card>
 );
 
-// --- 4. PREMIUM CHART (Area + Gradients) ---
+// --- 4. PREMIUM CHART (Bigger, Gridded, Time Axis) ---
 const MedicalChart = ({ data, dataKey, color, label, unit, domain, height, icon: Icon }) => {
   const latest = data.length ? Math.round(data[data.length - 1][dataKey]) : '--';
   const containerRef = useRef(null);
   const [chartWidth, setChartWidth] = useState(300);
-
-  // Unique ID for the gradient to prevent conflicts
   const gradientId = `gradient-${dataKey}`;
 
   useEffect(() => {
@@ -118,28 +113,41 @@ const MedicalChart = ({ data, dataKey, color, label, unit, domain, height, icon:
       </Box>
       
       {/* The Chart */}
-      <AreaChart width={chartWidth} height={height} data={data} margin={{ top: 50, right: 0, left: -20, bottom: 0 }}>
+      <AreaChart width={chartWidth} height={height} data={data} margin={{ top: 50, right: 10, left: -10, bottom: 0 }}>
         <defs>
           <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
             <stop offset="5%" stopColor={color} stopOpacity={0.4}/>
             <stop offset="95%" stopColor={color} stopOpacity={0.0}/>
           </linearGradient>
         </defs>
-        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.06)" />
-        <XAxis dataKey="time" hide />
+        
+        {/* GRID: Made stronger (opacity 0.1) and added vertical lines */}
+        <CartesianGrid strokeDasharray="3 3" vertical={true} stroke="rgba(255,255,255,0.1)" />
+        
+        {/* X-AXIS: Now Visible with Time */}
+        <XAxis 
+          dataKey="time" 
+          tick={{ fill: '#71717a', fontSize: 10 }} 
+          axisLine={false} 
+          tickLine={false} 
+          minTickGap={30}
+        />
+        
         <YAxis 
           domain={domain} 
-          tick={{ fill: '#52525B', fontSize: 10, fontWeight: 500 }} 
+          tick={{ fill: '#71717a', fontSize: 10, fontWeight: 500 }} 
           axisLine={false} 
           tickLine={false}
           width={40}
         />
+        
         <Tooltip 
           contentStyle={{ backgroundColor: '#18181B', borderRadius: 12, border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.5)' }} 
           itemStyle={{ color: '#FAFAFA', fontWeight: 600 }}
           labelStyle={{ display: 'none' }}
           formatter={(value) => [`${Math.round(value)} ${unit}`, label]}
         />
+        
         <Area 
           type="monotone" 
           dataKey={dataKey} 
@@ -180,7 +188,7 @@ export default function App() {
 
   useEffect(() => { 
     fetchData(); 
-    const interval = setInterval(fetchData, 300000); // 5 min refresh
+    const interval = setInterval(fetchData, 300000); 
     return () => clearInterval(interval);
   }, []);
 
@@ -227,7 +235,7 @@ export default function App() {
 
         {/* CHARTS GRID */}
         <Grid container spacing={3}>
-          {/* Heart Rate - Tall & Prominent */}
+          {/* Heart Rate - BIGGER (400px) */}
           <Grid item xs={12} md={8}>
             <Card sx={{ height: '100%' }}>
               <CardContent sx={{ p: 0, height: '100%', '&:last-child': { pb: 0 } }}>
@@ -238,14 +246,14 @@ export default function App() {
                   label="Heart Rate" 
                   unit="BPM" 
                   domain={[40, 180]} 
-                  height={350} 
+                  height={400} // Increased Size
                   icon={Heart}
                 />
               </CardContent>
             </Card>
           </Grid>
           
-          {/* Side Charts */}
+          {/* Side Charts - BIGGER (200px each) */}
           <Grid item xs={12} md={4}>
             <Stack spacing={3}>
                 <Card>
@@ -257,7 +265,7 @@ export default function App() {
                           label="Blood Oxygen" 
                           unit="%" 
                           domain={[85, 100]} 
-                          height={160} 
+                          height={200} // Increased Size
                           icon={Droplets}
                         />
                     </CardContent>
@@ -271,7 +279,7 @@ export default function App() {
                           label="Respiration" 
                           unit="brpm" 
                           domain={[10, 25]} 
-                          height={160} 
+                          height={200} // Increased Size
                           icon={Wind}
                         />
                     </CardContent>
