@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
-  Box, Card, CardContent, Typography, Grid, IconButton, ThemeProvider, createTheme, CssBaseline, Chip, useTheme
+  Box, Card, CardContent, Typography, Grid, IconButton, ThemeProvider, createTheme, CssBaseline, Chip
 } from '@mui/material';
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceArea 
@@ -9,7 +9,7 @@ import {
   RefreshCw, Activity, Wind, Droplets, AlertTriangle 
 } from 'lucide-react';
 
-// --- 1. THEME ---
+// --- 1. THEME CONFIGURATION ---
 const generateTheme = () => createTheme({
   palette: {
     mode: 'dark',
@@ -41,13 +41,13 @@ const processData = (rawData) => {
   })).slice(-40); 
 };
 
-// --- 3. CHART COMPONENT (Bulletproof Layout) ---
-const MedicalChart = ({ data, dataKey, color, label, unit, domain, height = 200 }) => {
+// --- 3. CHART COMPONENT (THE FIX) ---
+// We accept a specific 'height' prop and pass it directly to the chart.
+const MedicalChart = ({ data, dataKey, color, label, unit, domain, height }) => {
   const latest = data.length ? Math.round(data[data.length - 1][dataKey]) : '--';
 
   return (
-    // 1. STRICT CONTAINER: We use a plain div with a hard-coded pixel height.
-    // This guarantees the chart always has space, preventing the "height(-1)" error.
+    // 1. Container: Forces explicit pixel size.
     <div style={{ width: '100%', height: height, position: 'relative' }}>
       
       {/* Header Overlay */}
@@ -59,11 +59,11 @@ const MedicalChart = ({ data, dataKey, color, label, unit, domain, height = 200 
         </div>
       </div>
       
-      {/* 2. RESPONSIVE CONTAINER: Added 'minWidth' to catch layout edge cases */}
-      <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+      {/* 2. Chart: We pass 'height={height}' (number) instead of "100%".
+         This prevents the browser from guessing and crashing. */}
+      <ResponsiveContainer width="100%" height={height}>
         <LineChart data={data} margin={{ top: 5, right: 0, bottom: 0, left: 0 }}>
           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.1)" />
-          {/* Hide X/Y Axis to keep it looking like a medical strip */}
           <XAxis dataKey="time" hide />
           <YAxis domain={domain} hide />
           <Tooltip 
@@ -77,7 +77,7 @@ const MedicalChart = ({ data, dataKey, color, label, unit, domain, height = 200 
             stroke={color} 
             strokeWidth={3} 
             dot={false} 
-            isAnimationActive={false} // Disabling animation prevents render race conditions
+            isAnimationActive={false} 
           />
           <ReferenceArea y1={domain[0]} y2={domain[1]} fill="transparent" />
         </LineChart>
@@ -85,6 +85,7 @@ const MedicalChart = ({ data, dataKey, color, label, unit, domain, height = 200 
     </div>
   );
 };
+
 // --- 4. MAIN APP ---
 export default function App() {
   const theme = useMemo(() => generateTheme(), []);
@@ -145,7 +146,7 @@ export default function App() {
                   label="Heart Rate" 
                   unit="BPM" 
                   domain={[40, 180]} 
-                  height={300} // <--- Explicit Pixel Height
+                  height={300} // Explicit height prevents crash
                 />
               </CardContent>
             </Card>
@@ -164,7 +165,7 @@ export default function App() {
                               label="Pulse Ox" 
                               unit="%" 
                               domain={[85, 100]} 
-                              height={140} // <--- Explicit Pixel Height
+                              height={140} // Explicit height prevents crash
                             />
                         </CardContent>
                     </Card>
@@ -179,7 +180,7 @@ export default function App() {
                               label="Respiration" 
                               unit="brpm" 
                               domain={[10, 25]} 
-                              height={140} // <--- Explicit Pixel Height
+                              height={140} // Explicit height prevents crash
                             />
                         </CardContent>
                     </Card>
