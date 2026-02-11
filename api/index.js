@@ -1,70 +1,66 @@
-import { GarminConnect } from 'garmin-connect';
+import pkg from 'garmin-connect';
+const { GarminConnect } = pkg;
 
-// --- 1. Helper: Generate Fake Data (The Safety Net) ---
-// We use this if Garmin login fails so the app doesn't crash.
-const generateMockData = () => {
+// --- Helper: Generate Mock Data ---
+const generateMockData = (errorMessage) => {
+  console.error("SERVING MOCK DATA. Reason:", errorMessage);
   const now = Date.now();
   const mockHR = [];
-  
-  // Generate 50 points of data ending now
   for (let i = 0; i < 50; i++) {
     mockHR.push([
       now - (50 - i) * 60 * 1000, 
-      65 + Math.floor(Math.random() * 20) // Random HR between 65-85
+      65 + Math.floor(Math.random() * 20)
     ]);
   }
   
   return {
     hr: { heartRateValues: mockHR },
-    spo2: null, 
-    resp: null,
-    isMock: true // Tells the frontend to show the "Demo Mode" chip
+    // Mock Daily Stats
+    stats: {
+      totalSteps: 8432,
+      totalDistanceMeters: 5240,
+      floorsAscended: 12
+    },
+    isMock: true,
+    debugError: errorMessage 
   };
 };
 
-// --- 2. Main Handler ---
 export default async function handler(req, res) {
-  // Grab secrets from Vercel Environment Variables
   const email = process.env.GARMIN_EMAIL;
   const password = process.env.GARMIN_PASSWORD;
 
-  // A. If no credentials, return Mock Data immediately
   if (!email || !password) {
-    console.warn("No credentials found. Serving Mock Data.");
-    return res.status(200).json(generateMockData());
+    return res.status(200).json(generateMockData("Missing Credentials"));
   }
 
   try {
-    // B. Initialize Garmin Wrapper
     const GC = new GarminConnect({ username: email, password: password });
-    
-    // C. Log in to Garmin (This is where it might fail if 2FA is on)
     await GC.login();
 
-    // D. Fetch Real Data for Today
-    const today = new Date().toISOString().split('T')[0];
-    
-    // Fetch all 3 metrics in parallel for speed
-    const [hr, spo2, resp] = await Promise.all([
-      GC.getHeartRate(today),
-      GC.getPulseOx(today),
-      GC.getRespiration(today)
-    ]);
+    const today = new Date(); 
 
-    // E. Success! Return real data
+    // 1. Fetch Heart Rate (Time Series)
+    const hr = await GC.getHeartRate(today);
+
+    // 2. Fetch Daily Summary (Steps, Floors, Distance)
+    // We wrap this in a try/catch because sometimes summary data isn't ready immediately
+    let stats = { totalSteps: 0, totalDistanceMeters: 0, floorsAscended: 0 };
+    try {
+      const summary = await GC.getUserSummary(today);
+      stats = summary;
+    } catch (e) {
+      console.error("Failed to fetch summary:", e);
+    }
+
     res.status(200).json({ 
       hr, 
-      spo2, 
-      resp, 
+      stats, // <--- New Data Field
       isMock: false 
     });
 
   } catch (error) {
-    // F. FAILURE SAFETY NET
-    // If login fails, log the error on the server console...
-    console.error("Garmin Login Failed:", error.message);
-    
-    // ...but send Mock Data to the frontend so it looks beautiful.
-    res.status(200).json(generateMockData());
+    console.error("Garmin API Error:", error.message);
+    res.status(200).json(generateMockData(error.message));
   }
 }
