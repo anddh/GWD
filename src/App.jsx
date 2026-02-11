@@ -74,21 +74,22 @@ const StatCard = ({ icon: Icon, label, value, unit, color }) => (
   </Card>
 );
 
-// --- 4. AUTO-SCALING CHART COMPONENT ---
+// --- 4. BULLETPROOF CHART COMPONENT ---
 const MedicalChart = ({ data, dataKey, color, label, unit, domain, icon: Icon }) => {
   const latest = data.length ? Math.round(data[data.length - 1][dataKey]) : '--';
   const containerRef = useRef(null);
-  
-  // We track both width AND height now
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
-  const gradientId = `gradient-${dataKey}`;
+  
+  // STABLE ID: We use the label as the ID to ensure it never changes.
+  // This prevents the "missing gradient" bug.
+  const gradientId = `grad-${label.replace(/\s+/g, '-').toLowerCase()}`;
 
   useEffect(() => {
     if (!containerRef.current) return;
-
-    // The Observer watches for ANY size change (window resize or CSS change)
+    
     const resizeObserver = new ResizeObserver((entries) => {
       for (let entry of entries) {
+        // We set state to the exact pixel size of the container
         setDimensions({
           width: entry.contentRect.width,
           height: entry.contentRect.height
@@ -101,7 +102,6 @@ const MedicalChart = ({ data, dataKey, color, label, unit, domain, icon: Icon })
   }, []);
 
   return (
-    // The container fills 100% of the parent Card
     <div ref={containerRef} style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden' }}>
       
       {/* Header Overlay */}
@@ -117,12 +117,12 @@ const MedicalChart = ({ data, dataKey, color, label, unit, domain, icon: Icon })
         </Typography>
       </Box>
       
-      {/* Chart only renders when we know the dimensions */}
-      {dimensions.width > 0 && dimensions.height > 0 && (
+      {/* We only render Recharts if we have a valid width > 0 */}
+      {dimensions.width > 0 && (
         <AreaChart width={dimensions.width} height={dimensions.height} data={data} margin={{ top: 50, right: 10, left: -10, bottom: 0 }}>
           <defs>
             <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor={color} stopOpacity={0.4}/>
+              <stop offset="5%" stopColor={color} stopOpacity={0.5}/>
               <stop offset="95%" stopColor={color} stopOpacity={0.0}/>
             </linearGradient>
           </defs>
@@ -233,12 +233,11 @@ export default function App() {
           </Grid>
         </Grid>
 
-        {/* CHARTS GRID - NOW USING VIEWPORT HEIGHT (vh) */}
+        {/* CHARTS GRID - VIEWPORT HEIGHT (vh) */}
         <Grid container spacing={3}>
           {/* Main Chart */}
           <Grid item xs={12} md={8}>
             <Card sx={{ 
-              // Mobile: 40% of screen height. Desktop: 55% of screen height
               height: { xs: '40vh', md: '55vh' }, 
               minHeight: 300 
             }}>
@@ -260,7 +259,6 @@ export default function App() {
           <Grid item xs={12} md={4}>
             <Stack spacing={3} sx={{ height: '100%' }}>
                 <Card sx={{ 
-                   // Mobile: 25% screen. Desktop: half of the main chart (approx 26vh)
                    height: { xs: '25vh', md: '26vh' }, 
                    minHeight: 180,
                    flex: 1 
