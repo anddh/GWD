@@ -1,286 +1,186 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
-  Box, Card, CardContent, Typography, Grid, ThemeProvider, createTheme, CssBaseline, Chip, Stack, IconButton
+  Box, Card, CardContent, Typography, Grid, IconButton, ThemeProvider, createTheme, CssBaseline, Chip
 } from '@mui/material';
 import { 
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer 
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip 
 } from 'recharts';
 import { 
-  Activity, Footprints, Map, ArrowUpCircle, RefreshCw, Heart, Wind, Droplets 
+  Activity, AlertTriangle 
 } from 'lucide-react';
 
-// --- 1. THEME ---
 const generateTheme = () => createTheme({
   palette: {
     mode: 'dark',
-    primary: { main: '#8B5CF6' },
-    background: { default: '#09090B', paper: '#18181B' }, 
-    text: { primary: '#FAFAFA', secondary: '#A1A1AA' },
-    error: { main: '#EF4444' },   
-    info: { main: '#06B6D4' },    
-    success: { main: '#10B981' }, 
-    warning: { main: '#F59E0B' }  
+    primary: { main: '#D0BCFF' },
+    background: { default: '#141218', paper: '#1D1B20' },
+    text: { primary: '#E6E1E5', secondary: '#CAC4D0' },
+    error: { main: '#F2B8B5' },   
+    info: { main: '#A0C4FF' },    
+    success: { main: '#9CD67D' }, 
   },
-  typography: { fontFamily: '"Inter", "Roboto", sans-serif' },
+  typography: { fontFamily: 'Roboto, sans-serif' },
   shape: { borderRadius: 24 },
   components: {
-    MuiCard: { 
-      styleOverrides: { 
-        root: { 
-          backgroundImage: 'none', 
-          backgroundColor: '#18181B', 
-          border: '1px solid rgba(255,255,255,0.08)',
-          boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)'
-        } 
-      } 
-    }
+    MuiCard: { styleOverrides: { root: { backgroundImage: 'none', backgroundColor: '#2B2930' } } }
   }
 });
 
-// --- 2. DATA PROCESSOR ---
 const processData = (rawData) => {
-  const hrValues = rawData?.hr?.heartRateValues || [];
-  const chartData = hrValues.map((point) => ({
-    time: new Date(point[0]).toLocaleTimeString([], { hour: '2-digit', minute:'2-digit', hour12: false }),
+  if (!rawData || !rawData.hr) return [];
+  const hrValues = rawData.hr.heartRateValues || [];
+  return hrValues.map((point) => ({
+    time: new Date(point[0]).toLocaleTimeString([], { hour: '2-digit', minute:'2-digit' }),
     hr: point[1],
     spo2: 95 + (Math.random() * 4), 
     resp: 12 + (Math.random() * 6),
-  })).slice(-45); 
-
-  const stats = rawData?.stats || {};
-  return {
-    chartData,
-    daily: {
-      steps: stats.totalSteps || 0,
-      distance: (stats.totalDistanceMeters || 0) / 1000, 
-      floors: Math.floor(stats.floorsAscended || 0)
-    }
-  };
+  })).slice(-40); 
 };
 
-// --- 3. STAT CARD ---
-const StatCard = ({ icon: Icon, label, value, unit, color }) => (
-  <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center', p: 3, position: 'relative', overflow: 'hidden' }}>
-    <Box sx={{ position: 'absolute', top: -20, right: -20, width: 100, height: 100, borderRadius: '50%', bgcolor: color, opacity: 0.1, filter: 'blur(40px)' }} />
-    <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-      <Box sx={{ p: 1, borderRadius: '12px', bgcolor: `${color}15`, color: color, mr: 1.5 }}>
-        <Icon size={20} strokeWidth={2.5} />
-      </Box>
-      <Typography variant="caption" color="text.secondary" fontWeight="600" textTransform="uppercase" letterSpacing={1}>{label}</Typography>
-    </Box>
-    <Typography variant="h4" sx={{ zIndex: 1, fontWeight: 700 }}>
-      {value} <Typography component="span" variant="body1" color="text.secondary" fontWeight="500">{unit}</Typography>
-    </Typography>
-  </Card>
-);
-
-// --- 4. ABSOLUTE FILL CHART COMPONENT ---
-// This is the fix. We force the chart to fill the container using absolute positioning.
-const MedicalChart = ({ data, dataKey, color, label, unit, domain, icon: Icon }) => {
+// --- CHART COMPONENT (With Dynamic Scaling) ---
+const MedicalChart = ({ data, dataKey, color, label, unit, height }) => {
   const latest = data.length ? Math.round(data[data.length - 1][dataKey]) : '--';
-  const gradientId = `grad-${label.replace(/\s/g, '')}`; // Simple ID
+  const containerRef = useRef(null);
+  
+  // Start with a safe default width
+  const [chartWidth, setChartWidth] = useState(300);
+
+  useEffect(() => {
+    // 1. Immediate measure
+    if (containerRef.current) {
+      setChartWidth(containerRef.current.offsetWidth);
+    }
+
+    // 2. Window resize listener
+    const handleResize = () => {
+      if (containerRef.current) {
+        setChartWidth(containerRef.current.offsetWidth);
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   return (
-    // 1. The Parent is Relative (The anchor)
-    <Box sx={{ width: '100%', height: '100%', position: 'relative' }}>
+    <div ref={containerRef} style={{ width: '100%', height: height, position: 'relative', overflow: 'hidden' }}>
       
       {/* Header Overlay */}
-      <Box sx={{ position: 'absolute', top: 20, left: 24, zIndex: 20 }}>
-        <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mb: 0.5 }}>
-           <Box sx={{ color: color, display: 'flex' }}><Icon size={18} strokeWidth={2.5}/></Box>
-           <Typography variant="subtitle2" sx={{ color: 'text.secondary', fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase' }}>
-             {label}
-           </Typography>
-        </Stack>
-        <Typography variant="h3" sx={{ color: 'text.primary', fontWeight: '800', letterSpacing: '-1px' }}>
-            {latest} <Typography component="span" variant="h6" sx={{ color: 'text.secondary', fontWeight: 500 }}>{unit}</Typography>
-        </Typography>
-      </Box>
-      
-      {/* 2. The Chart Container is ABSOLUTE (Pinned to corners) */}
-      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}>
-        <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={data} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
-            <defs>
-              <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor={color} stopOpacity={0.5}/>
-                <stop offset="95%" stopColor={color} stopOpacity={0.0}/>
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" vertical={true} stroke="rgba(255,255,255,0.08)" />
-            <XAxis 
-              dataKey="time" 
-              tick={{ fill: '#71717a', fontSize: 10 }} 
-              axisLine={false} 
-              tickLine={false} 
-              minTickGap={30}
-              height={30}
-              dy={10}
-            />
-            <YAxis 
-              domain={domain} 
-              tick={{ fill: '#71717a', fontSize: 10, fontWeight: 500 }} 
-              axisLine={false} 
-              tickLine={false}
-              width={40}
-              dx={-10}
-            />
-            <Tooltip 
-              contentStyle={{ backgroundColor: '#18181B', borderRadius: 12, border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.5)' }} 
-              itemStyle={{ color: '#FAFAFA', fontWeight: 600 }}
-              labelStyle={{ display: 'none' }}
-              formatter={(value) => [`${Math.round(value)} ${unit}`, label]}
-            />
-            <Area 
-              type="monotone" 
-              dataKey={dataKey} 
-              stroke={color} 
-              strokeWidth={3} 
-              fillOpacity={1} 
-              fill={`url(#${gradientId})`} 
-              animationDuration={1500}
-            />
-          </AreaChart>
-        </ResponsiveContainer>
+      <div style={{ position: 'absolute', top: '10px', left: '20px', zIndex: 10 }}>
+        <Typography variant="caption" sx={{ color: 'text.secondary', textTransform: 'uppercase', letterSpacing: 1 }}>{label}</Typography>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
+            <Typography variant="h4" sx={{ color: color, fontWeight: 'bold' }}>{latest}</Typography>
+            <Typography variant="caption" sx={{ color: 'text.secondary' }}>{unit}</Typography>
+        </div>
       </div>
-    </Box>
+      
+      {/* Chart */}
+      <LineChart width={chartWidth} height={height} data={data}>
+        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.1)" />
+        <XAxis dataKey="time" hide />
+        
+        {/* FIX: Dynamic Domain Scaling 
+            We use 'dataMin - 5' and 'dataMax + 5' to zoom in on the line automatically. 
+        */}
+        <YAxis domain={['dataMin - 5', 'dataMax + 5']} hide />
+        
+        <Tooltip 
+          contentStyle={{ backgroundColor: '#1D1B20', borderRadius: 12, border: '1px solid rgba(255,255,255,0.1)' }} 
+          itemStyle={{ color: '#fff' }}
+          labelStyle={{ display: 'none' }}
+        />
+        <Line 
+          type="monotone" 
+          dataKey={dataKey} 
+          stroke={color} 
+          strokeWidth={3} 
+          dot={{ r: 4, strokeWidth: 0, fill: color }}
+          activeDot={{ r: 6 }}
+          isAnimationActive={true} 
+          animationDuration={1500}
+        />
+      </LineChart>
+    </div>
   );
 };
 
-// --- 5. MAIN APP ---
 export default function App() {
   const theme = useMemo(() => generateTheme(), []);
-  const [data, setData] = useState({ chartData: [], daily: { steps: 0, distance: 0, floors: 0 } });
+  const [data, setData] = useState([]);
   const [usingMock, setUsingMock] = useState(false);
-  const [debugMsg, setDebugMsg] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [debugError, setDebugError] = useState(null);
 
   const fetchData = async () => {
-    setLoading(true);
     try {
       const res = await fetch('/api?t=' + Date.now()); 
       if (!res.ok) throw new Error("Server Error");
       const json = await res.json();
+      
       setUsingMock(!!json.isMock);
-      if (json.debugError) setDebugMsg(json.debugError);
+      if (json.debugError) setDebugError(json.debugError);
+      
       setData(processData(json));
     } catch (e) {
       console.error("Update failed:", e);
-    } finally {
-      setLoading(false);
     }
   };
 
   useEffect(() => { 
     fetchData(); 
-    const interval = setInterval(fetchData, 300000); 
+    const interval = setInterval(fetchData, 30000);
     return () => clearInterval(interval);
   }, []);
 
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <Box sx={{ p: { xs: 2, md: 4 }, minHeight: '100vh', bgcolor: 'background.default' }}>
+      <Box sx={{ p: 3, minHeight: '100vh', bgcolor: 'background.default' }}>
         
-        {/* Header */}
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3, alignItems: 'center' }}>
-          <Box>
-             <Typography variant="h4" fontWeight="800" letterSpacing="-1px">Health<span style={{color: theme.palette.primary.main}}>Dash</span></Typography>
-             <Typography variant="body2" color="text.secondary">Real-time biometrics & daily activity</Typography>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 4, alignItems: 'center' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Activity size={32} color={theme.palette.primary.main} />
+            <Typography variant="h5" fontWeight="600">Garmin Vitals</Typography>
           </Box>
-          <Box sx={{ display: 'flex', gap: 1 }}>
-            {usingMock && <Chip label="Demo Data" size="small" color="warning" variant="outlined" sx={{ borderColor: 'rgba(245, 158, 11, 0.3)' }} />}
-            <IconButton onClick={fetchData} disabled={loading} sx={{ bgcolor: 'rgba(255,255,255,0.05)', '&:hover': { bgcolor: 'rgba(255,255,255,0.1)' } }}>
-              <RefreshCw size={18} className={loading ? "spin" : ""} color="#fff" />
-            </IconButton>
+          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+             {usingMock && <Chip label="Demo Mode" color="warning" variant="outlined" />}
+             <Chip label="Live Sync" color="success" variant="filled" />
           </Box>
         </Box>
 
-        {/* ERROR BAR */}
-        {usingMock && debugMsg && (
-          <Box sx={{ p: 2, mb: 3, bgcolor: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.2)', borderRadius: 3 }}>
-            <Typography variant="caption" color="error" sx={{ fontFamily: 'monospace', display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Activity size={14} /> <strong>STATUS:</strong> {debugMsg.substring(0, 100)}...
-            </Typography>
+        {/* Debug Error Message */}
+        {debugError && (
+          <Box sx={{ p: 2, mb: 3, bgcolor: 'rgba(255, 0, 0, 0.1)', border: '1px solid #ff4444', borderRadius: 2, color: '#ff8888', fontSize: 12 }}>
+            <strong>Backend Error:</strong> {debugError}
           </Box>
         )}
 
-        {/* STATS ROW */}
-        <Grid container spacing={2} sx={{ mb: 3 }}>
-          <Grid item xs={12} sm={4}>
-            <StatCard icon={Footprints} label="Daily Steps" value={data.daily.steps.toLocaleString()} unit="steps" color={theme.palette.info.main} />
-          </Grid>
-          <Grid item xs={12} sm={4}>
-            <StatCard icon={Map} label="Distance" value={data.daily.distance.toFixed(2)} unit="km" color={theme.palette.success.main} />
-          </Grid>
-          <Grid item xs={12} sm={4}>
-            <StatCard icon={ArrowUpCircle} label="Floors" value={data.daily.floors} unit="climbed" color={theme.palette.warning.main} />
-          </Grid>
-        </Grid>
-
-        {/* CHARTS GRID */}
         <Grid container spacing={3}>
-          {/* Main Chart */}
           <Grid item xs={12} md={8}>
-            <Card sx={{ 
-              height: { xs: '40vh', md: '55vh' }, 
-              minHeight: 300,
-              position: 'relative' // Vital for absolute child
-            }}>
-              <CardContent sx={{ p: 0, height: '100%', '&:last-child': { pb: 0 } }}>
-                <MedicalChart 
-                  data={data.chartData} 
-                  dataKey="hr" 
-                  color={theme.palette.error.main} 
-                  label="Heart Rate" 
-                  unit="BPM" 
-                  domain={[40, 180]} 
-                  icon={Heart}
-                />
+            <Card sx={{ border: '1px solid rgba(255,255,255,0.1)' }}> 
+              <CardContent sx={{ p: 0, '&:last-child': { pb: 0 } }}>
+                {/* Removed manual domain props. The chart now calculates it automatically. */}
+                <MedicalChart data={data} dataKey="hr" color={theme.palette.error.main} label="Heart Rate" unit="BPM" height={300} />
               </CardContent>
             </Card>
           </Grid>
           
-          {/* Side Charts Stack */}
           <Grid item xs={12} md={4}>
-            <Stack spacing={3} sx={{ height: '100%' }}>
-                <Card sx={{ 
-                   height: { xs: '25vh', md: '26vh' }, 
-                   minHeight: 180,
-                   flex: 1,
-                   position: 'relative' // Vital
-                }}>
-                    <CardContent sx={{ p: 0, height: '100%', '&:last-child': { pb: 0 } }}>
-                        <MedicalChart 
-                          data={data.chartData} 
-                          dataKey="spo2" 
-                          color={theme.palette.info.main} 
-                          label="Blood Oxygen" 
-                          unit="%" 
-                          domain={[85, 100]} 
-                          icon={Droplets}
-                        />
-                    </CardContent>
-                </Card>
-                <Card sx={{ 
-                   height: { xs: '25vh', md: '26vh' }, 
-                   minHeight: 180,
-                   flex: 1,
-                   position: 'relative' // Vital
-                }}>
-                    <CardContent sx={{ p: 0, height: '100%', '&:last-child': { pb: 0 } }}>
-                        <MedicalChart 
-                          data={data.chartData} 
-                          dataKey="resp" 
-                          color={theme.palette.success.main} 
-                          label="Respiration" 
-                          unit="brpm" 
-                          domain={[10, 25]} 
-                          icon={Wind}
-                        />
-                    </CardContent>
-                </Card>
-            </Stack>
+            <Grid container spacing={3}>
+                <Grid item xs={12}>
+                    <Card sx={{ border: '1px solid rgba(255,255,255,0.1)' }}>
+                        <CardContent sx={{ p: 0, '&:last-child': { pb: 0 } }}>
+                            <MedicalChart data={data} dataKey="spo2" color={theme.palette.info.main} label="Pulse Ox" unit="%" height={140} />
+                        </CardContent>
+                    </Card>
+                </Grid>
+                <Grid item xs={12}>
+                    <Card sx={{ border: '1px solid rgba(255,255,255,0.1)' }}>
+                        <CardContent sx={{ p: 0, '&:last-child': { pb: 0 } }}>
+                            <MedicalChart data={data} dataKey="resp" color={theme.palette.success.main} label="Respiration" unit="brpm" height={140} />
+                        </CardContent>
+                    </Card>
+                </Grid>
+            </Grid>
           </Grid>
         </Grid>
       </Box>
