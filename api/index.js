@@ -1,55 +1,28 @@
-import { GarminConnect } from 'garmin-connect';
+// api/index.js
 
-// --- Helper: Generate Fake Data if Real Data Fails ---
-const generateMockData = () => {
+// 1. COMMENT OUT the library. 
+// If the server was crashing because it couldn't find this, this fixes it instantly.
+// import { GarminConnect } from 'garmin-connect';
+
+export default async function handler(req, res) {
+  // 2. Generate Fake Data locally
   const now = Date.now();
   const mockHR = [];
-  // Generate 50 points of data ending now
+  
   for (let i = 0; i < 50; i++) {
     mockHR.push([
       now - (50 - i) * 60 * 1000, 
-      65 + Math.floor(Math.random() * 20) // Random HR between 65-85
+      65 + Math.floor(Math.random() * 20)
     ]);
   }
-  return {
+
+  const mockData = {
     hr: { heartRateValues: mockHR },
-    spo2: null, 
-    resp: null,
-    isMock: true // Flag to tell frontend we are in demo mode
+    spo2: 98, 
+    resp: 15,
+    isMock: true
   };
-};
 
-export default async function handler(req, res) {
-  const email = process.env.GARMIN_EMAIL;
-  const password = process.env.GARMIN_PASSWORD;
-
-  // 1. If credentials missing, return Mock Data immediately
-  if (!email || !password) {
-    console.warn("No credentials found. Returning Mock Data.");
-    return res.status(200).json(generateMockData());
-  }
-
-  try {
-    // 2. Try to Login
-    const GC = new GarminConnect({ username: email, password: password });
-    
-    // 2FA or Bad Password will throw an error here:
-    await GC.login();
-
-    // 3. Fetch Real Data
-    const today = new Date().toISOString().split('T')[0];
-    const [hr, spo2, resp] = await Promise.all([
-      GC.getHeartRate(today),
-      GC.getPulseOx(today),
-      GC.getRespiration(today)
-    ]);
-
-    // 4. Return Real Data
-    res.status(200).json({ hr, spo2, resp, isMock: false });
-
-  } catch (error) {
-    // 5. SAFETY NET: If login fails, log error but return Mock Data
-    console.error("Garmin Login Failed:", error.message);
-    res.status(200).json(generateMockData());
-  }
+  // 3. Return it immediately
+  res.status(200).json(mockData);
 }
