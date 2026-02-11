@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Box, Card, CardContent, Typography, Grid, ThemeProvider, createTheme, CssBaseline, Chip, Stack, IconButton
 } from '@mui/material';
 import { 
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip 
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer 
 } from 'recharts';
 import { 
   Activity, Footprints, Map, ArrowUpCircle, RefreshCw, Heart, Wind, Droplets 
@@ -74,38 +74,18 @@ const StatCard = ({ icon: Icon, label, value, unit, color }) => (
   </Card>
 );
 
-// --- 4. BULLETPROOF CHART COMPONENT ---
+// --- 4. ABSOLUTE FILL CHART COMPONENT ---
+// This is the fix. We force the chart to fill the container using absolute positioning.
 const MedicalChart = ({ data, dataKey, color, label, unit, domain, icon: Icon }) => {
   const latest = data.length ? Math.round(data[data.length - 1][dataKey]) : '--';
-  const containerRef = useRef(null);
-  const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
-  
-  // STABLE ID: We use the label as the ID to ensure it never changes.
-  // This prevents the "missing gradient" bug.
-  const gradientId = `grad-${label.replace(/\s+/g, '-').toLowerCase()}`;
-
-  useEffect(() => {
-    if (!containerRef.current) return;
-    
-    const resizeObserver = new ResizeObserver((entries) => {
-      for (let entry of entries) {
-        // We set state to the exact pixel size of the container
-        setDimensions({
-          width: entry.contentRect.width,
-          height: entry.contentRect.height
-        });
-      }
-    });
-
-    resizeObserver.observe(containerRef.current);
-    return () => resizeObserver.disconnect();
-  }, []);
+  const gradientId = `grad-${label.replace(/\s/g, '')}`; // Simple ID
 
   return (
-    <div ref={containerRef} style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden' }}>
+    // 1. The Parent is Relative (The anchor)
+    <Box sx={{ width: '100%', height: '100%', position: 'relative' }}>
       
       {/* Header Overlay */}
-      <Box sx={{ position: 'absolute', top: 20, left: 24, zIndex: 10 }}>
+      <Box sx={{ position: 'absolute', top: 20, left: 24, zIndex: 20 }}>
         <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mb: 0.5 }}>
            <Box sx={{ color: color, display: 'flex' }}><Icon size={18} strokeWidth={2.5}/></Box>
            <Typography variant="subtitle2" sx={{ color: 'text.secondary', fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase' }}>
@@ -117,48 +97,53 @@ const MedicalChart = ({ data, dataKey, color, label, unit, domain, icon: Icon })
         </Typography>
       </Box>
       
-      {/* We only render Recharts if we have a valid width > 0 */}
-      {dimensions.width > 0 && (
-        <AreaChart width={dimensions.width} height={dimensions.height} data={data} margin={{ top: 50, right: 10, left: -10, bottom: 0 }}>
-          <defs>
-            <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor={color} stopOpacity={0.5}/>
-              <stop offset="95%" stopColor={color} stopOpacity={0.0}/>
-            </linearGradient>
-          </defs>
-          <CartesianGrid strokeDasharray="3 3" vertical={true} stroke="rgba(255,255,255,0.08)" />
-          <XAxis 
-            dataKey="time" 
-            tick={{ fill: '#71717a', fontSize: 10 }} 
-            axisLine={false} 
-            tickLine={false} 
-            minTickGap={30}
-          />
-          <YAxis 
-            domain={domain} 
-            tick={{ fill: '#71717a', fontSize: 10, fontWeight: 500 }} 
-            axisLine={false} 
-            tickLine={false}
-            width={40}
-          />
-          <Tooltip 
-            contentStyle={{ backgroundColor: '#18181B', borderRadius: 12, border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.5)' }} 
-            itemStyle={{ color: '#FAFAFA', fontWeight: 600 }}
-            labelStyle={{ display: 'none' }}
-            formatter={(value) => [`${Math.round(value)} ${unit}`, label]}
-          />
-          <Area 
-            type="monotone" 
-            dataKey={dataKey} 
-            stroke={color} 
-            strokeWidth={3} 
-            fillOpacity={1} 
-            fill={`url(#${gradientId})`} 
-            animationDuration={1500}
-          />
-        </AreaChart>
-      )}
-    </div>
+      {/* 2. The Chart Container is ABSOLUTE (Pinned to corners) */}
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart data={data} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
+            <defs>
+              <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor={color} stopOpacity={0.5}/>
+                <stop offset="95%" stopColor={color} stopOpacity={0.0}/>
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" vertical={true} stroke="rgba(255,255,255,0.08)" />
+            <XAxis 
+              dataKey="time" 
+              tick={{ fill: '#71717a', fontSize: 10 }} 
+              axisLine={false} 
+              tickLine={false} 
+              minTickGap={30}
+              height={30}
+              dy={10}
+            />
+            <YAxis 
+              domain={domain} 
+              tick={{ fill: '#71717a', fontSize: 10, fontWeight: 500 }} 
+              axisLine={false} 
+              tickLine={false}
+              width={40}
+              dx={-10}
+            />
+            <Tooltip 
+              contentStyle={{ backgroundColor: '#18181B', borderRadius: 12, border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.5)' }} 
+              itemStyle={{ color: '#FAFAFA', fontWeight: 600 }}
+              labelStyle={{ display: 'none' }}
+              formatter={(value) => [`${Math.round(value)} ${unit}`, label]}
+            />
+            <Area 
+              type="monotone" 
+              dataKey={dataKey} 
+              stroke={color} 
+              strokeWidth={3} 
+              fillOpacity={1} 
+              fill={`url(#${gradientId})`} 
+              animationDuration={1500}
+            />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+    </Box>
   );
 };
 
@@ -233,13 +218,14 @@ export default function App() {
           </Grid>
         </Grid>
 
-        {/* CHARTS GRID - VIEWPORT HEIGHT (vh) */}
+        {/* CHARTS GRID */}
         <Grid container spacing={3}>
           {/* Main Chart */}
           <Grid item xs={12} md={8}>
             <Card sx={{ 
               height: { xs: '40vh', md: '55vh' }, 
-              minHeight: 300 
+              minHeight: 300,
+              position: 'relative' // Vital for absolute child
             }}>
               <CardContent sx={{ p: 0, height: '100%', '&:last-child': { pb: 0 } }}>
                 <MedicalChart 
@@ -261,7 +247,8 @@ export default function App() {
                 <Card sx={{ 
                    height: { xs: '25vh', md: '26vh' }, 
                    minHeight: 180,
-                   flex: 1 
+                   flex: 1,
+                   position: 'relative' // Vital
                 }}>
                     <CardContent sx={{ p: 0, height: '100%', '&:last-child': { pb: 0 } }}>
                         <MedicalChart 
@@ -278,7 +265,8 @@ export default function App() {
                 <Card sx={{ 
                    height: { xs: '25vh', md: '26vh' }, 
                    minHeight: 180,
-                   flex: 1 
+                   flex: 1,
+                   position: 'relative' // Vital
                 }}>
                     <CardContent sx={{ p: 0, height: '100%', '&:last-child': { pb: 0 } }}>
                         <MedicalChart 
