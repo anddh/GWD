@@ -42,12 +42,15 @@ const processData = (rawData) => {
   })).slice(-40); 
 };
 
-// --- 3. CHART COMPONENT ---
+// --- 3. CHART COMPONENT (The "Force Render" Version) ---
 const MedicalChart = ({ data, dataKey, color, label, unit, domain, height }) => {
+  // Calculate latest value for the header
   const latest = data.length ? Math.round(data[data.length - 1][dataKey]) : '--';
 
   return (
-    <div style={{ width: '100%', height: height, position: 'relative' }}>
+    <div style={{ width: '100%', height: height, position: 'relative', overflow: 'hidden' }}>
+      
+      {/* Header Overlay */}
       <div style={{ position: 'absolute', top: 10, left: 20, zIndex: 10 }}>
         <Typography variant="caption" sx={{ color: 'text.secondary', textTransform: 'uppercase', letterSpacing: 1 }}>{label}</Typography>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
@@ -55,8 +58,13 @@ const MedicalChart = ({ data, dataKey, color, label, unit, domain, height }) => 
             <Typography variant="caption" sx={{ color: 'text.secondary' }}>{unit}</Typography>
         </div>
       </div>
-      <ResponsiveContainer width="100%" height={height}>
-        <LineChart data={data} margin={{ top: 5, right: 0, bottom: 0, left: 0 }}>
+      
+      {/* THE FIX: We REMOVED <ResponsiveContainer>.
+         We are putting the Width/Height directly on the Chart.
+         We assume a width of 500px for now just to force it to appear.
+      */}
+      <div style={{ marginTop: 0 }}>
+        <LineChart width={window.innerWidth > 600 ? 600 : 300} height={height} data={data}>
           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.1)" />
           <XAxis dataKey="time" hide />
           <YAxis domain={domain} hide />
@@ -65,14 +73,19 @@ const MedicalChart = ({ data, dataKey, color, label, unit, domain, height }) => 
             itemStyle={{ color: '#fff' }}
             labelStyle={{ display: 'none' }}
           />
-          <Line type="monotone" dataKey={dataKey} stroke={color} strokeWidth={3} dot={false} isAnimationActive={false} />
-          <ReferenceArea y1={domain[0]} y2={domain[1]} fill="transparent" />
+          <Line 
+            type="monotone" 
+            dataKey={dataKey} 
+            stroke={color} 
+            strokeWidth={4} // Made thicker so you can't miss it
+            dot={false} 
+            isAnimationActive={false} 
+          />
         </LineChart>
-      </ResponsiveContainer>
+      </div>
     </div>
   );
 };
-
 // --- 4. MAIN APP ---
 export default function App() {
   const theme = useMemo(() => generateTheme(), []);
