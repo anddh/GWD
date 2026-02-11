@@ -6,10 +6,10 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceArea 
 } from 'recharts';
 import { 
-  RefreshCw, Menu, Activity, Wind, Droplets, AlertTriangle 
+  RefreshCw, Activity, Wind, Droplets, AlertTriangle 
 } from 'lucide-react';
 
-// --- 1. THEME CONFIGURATION ---
+// --- 1. THEME ---
 const generateTheme = () => createTheme({
   palette: {
     mode: 'dark',
@@ -31,7 +31,6 @@ const generateTheme = () => createTheme({
 const processData = (rawData) => {
   if (!rawData || !rawData.hr) return [];
   
-  // Handle both real Garmin structure and our Mock structure
   const hrValues = rawData.hr.heartRateValues || [];
   
   return hrValues.map((point) => ({
@@ -42,13 +41,14 @@ const processData = (rawData) => {
   })).slice(-40); 
 };
 
-// --- 3. CHART COMPONENT (Fixed Layout) ---
-const MedicalChart = ({ data, dataKey, color, label, unit, domain }) => {
+// --- 3. CHART COMPONENT (FIXED) ---
+// We added a 'height' prop to force the chart open in pixels
+const MedicalChart = ({ data, dataKey, color, label, unit, domain, height = 200 }) => {
   const latest = data.length ? Math.round(data[data.length - 1][dataKey]) : '--';
 
   return (
-    // FIX: MinHeight ensures chart never collapses to 0 height
-    <Box sx={{ width: '100%', height: '100%', minHeight: 150, position: 'relative', display: 'flex', flexDirection: 'column' }}>
+    <Box sx={{ width: '100%', height: height, position: 'relative' }}>
+      {/* Header Overlay */}
       <Box sx={{ position: 'absolute', top: 10, left: 20, zIndex: 10 }}>
         <Typography variant="caption" sx={{ color: 'text.secondary', textTransform: 'uppercase', letterSpacing: 1 }}>{label}</Typography>
         <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1 }}>
@@ -57,24 +57,22 @@ const MedicalChart = ({ data, dataKey, color, label, unit, domain }) => {
         </Box>
       </Box>
       
-      {/* FIX: wrapper box to constrain Recharts */}
-      <Box sx={{ flexGrow: 1, width: '100%', minHeight: 0 }}>
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data}>
-            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.1)" />
-            <XAxis dataKey="time" hide />
-            <YAxis domain={domain} orientation="right" tick={{ fill: '#888', fontSize: 10 }} axisLine={false} tickLine={false} />
-            <Tooltip contentStyle={{ backgroundColor: '#1D1B20', borderRadius: 12, border: 'none' }} />
-            <Line type="monotone" dataKey={dataKey} stroke={color} strokeWidth={3} dot={false} isAnimationActive={false} />
-            <ReferenceArea y1={domain[0]} y2={domain[1]} fill="transparent" />
-          </LineChart>
-        </ResponsiveContainer>
-      </Box>
+      {/* Chart - Now using explicit pixel height from props */}
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={data}>
+          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.1)" />
+          <XAxis dataKey="time" hide />
+          <YAxis domain={domain} orientation="right" tick={{ fill: '#888', fontSize: 10 }} axisLine={false} tickLine={false} />
+          <Tooltip contentStyle={{ backgroundColor: '#1D1B20', borderRadius: 12, border: 'none' }} />
+          <Line type="monotone" dataKey={dataKey} stroke={color} strokeWidth={3} dot={false} isAnimationActive={false} />
+          <ReferenceArea y1={domain[0]} y2={domain[1]} fill="transparent" />
+        </LineChart>
+      </ResponsiveContainer>
     </Box>
   );
 };
 
-// --- 4. MAIN APP (Safe Fetching) ---
+// --- 4. MAIN APP ---
 export default function App() {
   const theme = useMemo(() => generateTheme(), []);
   const [data, setData] = useState([]);
@@ -87,17 +85,10 @@ export default function App() {
     setError(null);
     try {
       const res = await fetch('/api'); 
-      
-      // FIX: Check if server crashed properly before parsing JSON
-      if (!res.ok) {
-        throw new Error(`Server Error (${res.status})`);
-      }
+      if (!res.ok) throw new Error(`Server Error (${res.status})`);
 
       const json = await res.json();
-      
-      if (json.isMock) setUsingMock(true);
-      else setUsingMock(false);
-
+      setUsingMock(!!json.isMock);
       setData(processData(json));
     } catch (e) {
       console.error("Data Load Failed:", e);
@@ -113,11 +104,11 @@ export default function App() {
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <Box sx={{ p: 3, minHeight: '100vh', bgcolor: 'background.default' }}>
+        
+        {/* Header */}
         <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 4, alignItems: 'center' }}>
           <Typography variant="h5" fontWeight="600">Garmin Vitals</Typography>
-          
           <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-            {/* Status Chip */}
             {error ? (
                <Chip label="Error" color="error" icon={<AlertTriangle size={14}/>} />
             ) : usingMock ? (
@@ -130,29 +121,53 @@ export default function App() {
         </Box>
 
         <Grid container spacing={3}>
-          {/* Main Heart Rate Chart */}
+          {/* Main Heart Rate Chart - Fixed Height 300px */}
           <Grid item xs={12} md={8}>
-            <Card sx={{ height: 350, display: 'flex', flexDirection: 'column' }}>
-              <CardContent sx={{ flexGrow: 1, p: 0, '&:last-child': { pb: 0 } }}>
-                <MedicalChart data={data} dataKey="hr" color={theme.palette.error.main} label="Heart Rate" unit="BPM" domain={[40, 180]} />
+            <Card>
+              <CardContent sx={{ p: 0, '&:last-child': { pb: 0 } }}>
+                <MedicalChart 
+                  data={data} 
+                  dataKey="hr" 
+                  color={theme.palette.error.main} 
+                  label="Heart Rate" 
+                  unit="BPM" 
+                  domain={[40, 180]} 
+                  height={300} // <--- Explicit Pixel Height
+                />
               </CardContent>
             </Card>
           </Grid>
           
-          {/* Side Charts */}
+          {/* Side Charts - Fixed Height 140px */}
           <Grid item xs={12} md={4}>
             <Grid container spacing={3}>
                 <Grid item xs={12}>
-                    <Card sx={{ height: 160 }}>
-                        <CardContent sx={{ height: '100%', p: 0, '&:last-child': { pb: 0 } }}>
-                            <MedicalChart data={data} dataKey="spo2" color={theme.palette.info.main} label="Pulse Ox" unit="%" domain={[85, 100]} />
+                    <Card>
+                        <CardContent sx={{ p: 0, '&:last-child': { pb: 0 } }}>
+                            <MedicalChart 
+                              data={data} 
+                              dataKey="spo2" 
+                              color={theme.palette.info.main} 
+                              label="Pulse Ox" 
+                              unit="%" 
+                              domain={[85, 100]} 
+                              height={140} // <--- Explicit Pixel Height
+                            />
                         </CardContent>
                     </Card>
                 </Grid>
                 <Grid item xs={12}>
-                    <Card sx={{ height: 160 }}>
-                        <CardContent sx={{ height: '100%', p: 0, '&:last-child': { pb: 0 } }}>
-                            <MedicalChart data={data} dataKey="resp" color={theme.palette.success.main} label="Respiration" unit="brpm" domain={[10, 25]} />
+                    <Card>
+                        <CardContent sx={{ p: 0, '&:last-child': { pb: 0 } }}>
+                            <MedicalChart 
+                              data={data} 
+                              dataKey="resp" 
+                              color={theme.palette.success.main} 
+                              label="Respiration" 
+                              unit="brpm" 
+                              domain={[10, 25]} 
+                              height={140} // <--- Explicit Pixel Height
+                            />
                         </CardContent>
                     </Card>
                 </Grid>
