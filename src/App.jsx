@@ -3,7 +3,7 @@ import {
   Box, Card, CardContent, Typography, Grid, IconButton, ThemeProvider, createTheme, CssBaseline, Chip
 } from '@mui/material';
 import { 
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip 
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer 
 } from 'recharts';
 import { 
   Activity, AlertTriangle 
@@ -15,7 +15,7 @@ const generateTheme = () => createTheme({
     primary: { main: '#D0BCFF' },
     background: { default: '#141218', paper: '#1D1B20' },
     text: { primary: '#E6E1E5', secondary: '#CAC4D0' },
-    error: { main: '#F2B8B5' },   
+    error: { main: '#FFB4AB' },   
     info: { main: '#A0C4FF' },    
     success: { main: '#9CD67D' }, 
   },
@@ -37,27 +37,17 @@ const processData = (rawData) => {
   })).slice(-40); 
 };
 
-// --- CHART COMPONENT (With Dynamic Scaling) ---
+// --- HIGH-FIDELITY CHART COMPONENT ---
 const MedicalChart = ({ data, dataKey, color, label, unit, height }) => {
   const latest = data.length ? Math.round(data[data.length - 1][dataKey]) : '--';
   const containerRef = useRef(null);
-  
-  // Start with a safe default width
   const [chartWidth, setChartWidth] = useState(300);
 
   useEffect(() => {
-    // 1. Immediate measure
-    if (containerRef.current) {
-      setChartWidth(containerRef.current.offsetWidth);
-    }
-
-    // 2. Window resize listener
+    if (containerRef.current) setChartWidth(containerRef.current.offsetWidth);
     const handleResize = () => {
-      if (containerRef.current) {
-        setChartWidth(containerRef.current.offsetWidth);
-      }
+      if (containerRef.current) setChartWidth(containerRef.current.offsetWidth);
     };
-
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
@@ -67,39 +57,63 @@ const MedicalChart = ({ data, dataKey, color, label, unit, height }) => {
       
       {/* Header Overlay */}
       <div style={{ position: 'absolute', top: '10px', left: '20px', zIndex: 10 }}>
-        <Typography variant="caption" sx={{ color: 'text.secondary', textTransform: 'uppercase', letterSpacing: 1 }}>{label}</Typography>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
-            <Typography variant="h4" sx={{ color: color, fontWeight: 'bold' }}>{latest}</Typography>
-            <Typography variant="caption" sx={{ color: 'text.secondary' }}>{unit}</Typography>
+        <Typography variant="caption" sx={{ color: 'text.secondary', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700 }}>{label}</Typography>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
+            <Typography variant="h3" sx={{ color: color, fontWeight: 'bold', textShadow: `0 0 20px ${color}40` }}>{latest}</Typography>
+            <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500 }}>{unit}</Typography>
         </div>
       </div>
       
       {/* Chart */}
-      <LineChart width={chartWidth} height={height} data={data}>
-        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.1)" />
-        <XAxis dataKey="time" hide />
+      <AreaChart width={chartWidth} height={height} data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+        {/* Gradient Definition */}
+        <defs>
+          <linearGradient id={`gradient-${dataKey}`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="5%" stopColor={color} stopOpacity={0.3}/>
+            <stop offset="95%" stopColor={color} stopOpacity={0}/>
+          </linearGradient>
+        </defs>
+
+        {/* Grid Lines - Restored */}
+        <CartesianGrid strokeDasharray="3 3" vertical={true} stroke="rgba(255,255,255,0.05)" />
         
-        {/* FIX: Dynamic Domain Scaling 
-            We use 'dataMin - 5' and 'dataMax + 5' to zoom in on the line automatically. 
-        */}
-        <YAxis domain={['dataMin - 5', 'dataMax + 5']} hide />
+        {/* Axis Labels - Restored */}
+        <XAxis 
+          dataKey="time" 
+          tick={{ fill: '#666', fontSize: 10 }} 
+          tickLine={false}
+          axisLine={false}
+          interval="preserveStartEnd"
+          minTickGap={30}
+        />
+        <YAxis 
+          domain={['auto', 'auto']} 
+          tick={{ fill: '#666', fontSize: 10 }} 
+          tickLine={false}
+          axisLine={false}
+          width={40}
+        />
         
         <Tooltip 
-          contentStyle={{ backgroundColor: '#1D1B20', borderRadius: 12, border: '1px solid rgba(255,255,255,0.1)' }} 
+          contentStyle={{ backgroundColor: '#1E1E1E', borderRadius: 8, border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 4px 20px rgba(0,0,0,0.5)' }} 
           itemStyle={{ color: '#fff' }}
-          labelStyle={{ display: 'none' }}
+          labelStyle={{ color: '#aaa', marginBottom: 5 }}
         />
-        <Line 
+        
+        {/* Area + Line Combined */}
+        <Area 
           type="monotone" 
           dataKey={dataKey} 
           stroke={color} 
           strokeWidth={3} 
-          dot={{ r: 4, strokeWidth: 0, fill: color }}
-          activeDot={{ r: 6 }}
+          fill={`url(#gradient-${dataKey})`} // Apply the gradient
+          fillOpacity={1}
+          dot={false}
+          activeDot={{ r: 6, strokeWidth: 0, fill: '#fff' }}
           isAnimationActive={true} 
           animationDuration={1500}
         />
-      </LineChart>
+      </AreaChart>
     </div>
   );
 };
@@ -115,10 +129,8 @@ export default function App() {
       const res = await fetch('/api?t=' + Date.now()); 
       if (!res.ok) throw new Error("Server Error");
       const json = await res.json();
-      
       setUsingMock(!!json.isMock);
       if (json.debugError) setDebugError(json.debugError);
-      
       setData(processData(json));
     } catch (e) {
       console.error("Update failed:", e);
@@ -139,15 +151,14 @@ export default function App() {
         <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 4, alignItems: 'center' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             <Activity size={32} color={theme.palette.primary.main} />
-            <Typography variant="h5" fontWeight="600">Garmin Vitals</Typography>
+            <Typography variant="h5" fontWeight="600" sx={{ letterSpacing: 0.5 }}>Garmin Vitals</Typography>
           </Box>
           <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-             {usingMock && <Chip label="Demo Mode" color="warning" variant="outlined" />}
-             <Chip label="Live Sync" color="success" variant="filled" />
+             {usingMock && <Chip label="Demo Mode" color="warning" variant="outlined" size="small" />}
+             <Chip label="Live Sync" color="success" variant="filled" size="small" sx={{ fontWeight: 'bold' }} />
           </Box>
         </Box>
 
-        {/* Debug Error Message */}
         {debugError && (
           <Box sx={{ p: 2, mb: 3, bgcolor: 'rgba(255, 0, 0, 0.1)', border: '1px solid #ff4444', borderRadius: 2, color: '#ff8888', fontSize: 12 }}>
             <strong>Backend Error:</strong> {debugError}
@@ -156,9 +167,8 @@ export default function App() {
 
         <Grid container spacing={3}>
           <Grid item xs={12} md={8}>
-            <Card sx={{ border: '1px solid rgba(255,255,255,0.1)' }}> 
+            <Card sx={{ border: '1px solid rgba(255,255,255,0.08)', boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }}> 
               <CardContent sx={{ p: 0, '&:last-child': { pb: 0 } }}>
-                {/* Removed manual domain props. The chart now calculates it automatically. */}
                 <MedicalChart data={data} dataKey="hr" color={theme.palette.error.main} label="Heart Rate" unit="BPM" height={300} />
               </CardContent>
             </Card>
@@ -167,14 +177,14 @@ export default function App() {
           <Grid item xs={12} md={4}>
             <Grid container spacing={3}>
                 <Grid item xs={12}>
-                    <Card sx={{ border: '1px solid rgba(255,255,255,0.1)' }}>
+                    <Card sx={{ border: '1px solid rgba(255,255,255,0.08)', boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }}>
                         <CardContent sx={{ p: 0, '&:last-child': { pb: 0 } }}>
                             <MedicalChart data={data} dataKey="spo2" color={theme.palette.info.main} label="Pulse Ox" unit="%" height={140} />
                         </CardContent>
                     </Card>
                 </Grid>
                 <Grid item xs={12}>
-                    <Card sx={{ border: '1px solid rgba(255,255,255,0.1)' }}>
+                    <Card sx={{ border: '1px solid rgba(255,255,255,0.08)', boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }}>
                         <CardContent sx={{ p: 0, '&:last-child': { pb: 0 } }}>
                             <MedicalChart data={data} dataKey="resp" color={theme.palette.success.main} label="Respiration" unit="brpm" height={140} />
                         </CardContent>
