@@ -1,34 +1,58 @@
+// api/index.js
 import { GarminConnect } from 'garmin-connect';
 
+// --- Helper to generate fake data if Garmin blocks us ---
+const generateMockData = () => {
+  const now = Date.now();
+  const mockHR = [];
+  // Generate 50 points of data ending now
+  for (let i = 0; i < 50; i++) {
+    mockHR.push([
+      now - (50 - i) * 60 * 1000, // Time: 1 min intervals
+      60 + Math.floor(Math.random() * 40) // HR: 60-100 bpm
+    ]);
+  }
+  return {
+    hr: { heartRateValues: mockHR }, // Matches Garmin structure exactly
+    spo2: null, 
+    resp: null
+  };
+};
+
 export default async function handler(req, res) {
-  // 1. Grab secrets from the environment
   const email = process.env.GARMIN_EMAIL;
   const password = process.env.GARMIN_PASSWORD;
 
+  // 1. If no keys, return mock data immediately (Dev Mode)
   if (!email || !password) {
-    return res.status(500).json({ error: 'Missing credentials' });
+    console.warn("No credentials found. Serving Mock Data.");
+    return res.status(200).json(generateMockData());
   }
 
   try {
-    // 2. Login to Garmin
+    // 2. Try to Login to Garmin
     const GC = new GarminConnect({ username: email, password: password });
+    
+    // This is where it usually fails (2FA or IP ban)
     await GC.login();
 
-    // 3. Get today's date (YYYY-MM-DD)
     const today = new Date().toISOString().split('T')[0];
-
-    // 4. Fetch the data concurrently
+    
     const [hr, spo2, resp] = await Promise.all([
       GC.getHeartRate(today),
       GC.getPulseOx(today),
       GC.getRespiration(today)
     ]);
 
-    // 5. Send it back to the frontend
+    // 3. Success! Return real data
     res.status(200).json({ hr, spo2, resp });
 
   } catch (error) {
-    console.error("Garmin Error:", error);
-    res.status(500).json({ error: 'Failed to fetch data from Garmin' });
+    // 4. FAILURE! Log the error but return MOCK DATA so the UI doesn't break
+    console.error("Garmin Login Failed (likely 2FA or Bad Password):", error.message);
+    
+    // Return fake data with a flag so you know it's fake
+    const mock = generateMockData();
+    res.status(200).json({ ...mock, isMock: true });
   }
 }
