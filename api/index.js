@@ -1,8 +1,13 @@
-import { GarminConnect } from 'garmin-connect';
+// --- FIX START ---
+// We cannot use: import { GarminConnect } from 'garmin-connect';
+// We must import the whole package 'pkg' and extract the class from it.
+import pkg from 'garmin-connect';
+const { GarminConnect } = pkg;
+// --- FIX END ---
 
-// --- 1. Helper: Generate Fake Data (The Safety Net) ---
-// We use this if Garmin login fails so the app doesn't crash.
-const generateMockData = () => {
+// --- Helper: Generate Mock Data (Safety Net) ---
+const generateMockData = (errorMessage) => {
+  console.log("SERVING MOCK DATA. Reason:", errorMessage); // Log to server console
   const now = Date.now();
   const mockHR = [];
   
@@ -18,40 +23,36 @@ const generateMockData = () => {
     hr: { heartRateValues: mockHR },
     spo2: null, 
     resp: null,
-    isMock: true // Tells the frontend to show the "Demo Mode" chip
+    isMock: true,
+    debugError: errorMessage // Sends the error to the frontend for debugging
   };
 };
 
-// --- 2. Main Handler ---
 export default async function handler(req, res) {
-  // Grab secrets from Vercel Environment Variables
   const email = process.env.GARMIN_EMAIL;
   const password = process.env.GARMIN_PASSWORD;
 
-  // A. If no credentials, return Mock Data immediately
+  // 1. Check Credentials
   if (!email || !password) {
-    console.warn("No credentials found. Serving Mock Data.");
-    return res.status(200).json(generateMockData());
+    return res.status(200).json(generateMockData("Missing Credentials in Vercel Settings"));
   }
 
   try {
-    // B. Initialize Garmin Wrapper
+    // 2. Initialize Garmin Wrapper
     const GC = new GarminConnect({ username: email, password: password });
     
-    // C. Log in to Garmin (This is where it might fail if 2FA is on)
+    // 3. Login (This is usually where 2FA fails)
     await GC.login();
 
-    // D. Fetch Real Data for Today
+    // 4. Fetch Real Data
     const today = new Date().toISOString().split('T')[0];
-    
-    // Fetch all 3 metrics in parallel for speed
     const [hr, spo2, resp] = await Promise.all([
       GC.getHeartRate(today),
       GC.getPulseOx(today),
       GC.getRespiration(today)
     ]);
 
-    // E. Success! Return real data
+    // 5. Success!
     res.status(200).json({ 
       hr, 
       spo2, 
@@ -60,11 +61,9 @@ export default async function handler(req, res) {
     });
 
   } catch (error) {
-    // F. FAILURE SAFETY NET
-    // If login fails, log the error on the server console...
-    console.error("Garmin Login Failed:", error.message);
-    
-    // ...but send Mock Data to the frontend so it looks beautiful.
-    res.status(200).json(generateMockData());
+    // 6. FAILURE SAFETY NET
+    // If login fails, we return Mock Data so the dashboard doesn't crash.
+    console.error("Garmin API Error:", error.message);
+    res.status(200).json(generateMockData(error.message));
   }
 }
